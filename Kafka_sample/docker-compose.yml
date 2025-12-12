@@ -1,35 +1,34 @@
+name: 'stream'
+version: '3.8'
 services:
-  kafka-1:
-    image: apache/kafka
-    hostname: kafka-1
-    container_name: kafka-kraft-1
+  kafka:
+    image: confluentinc/cp-kafka:latest
+    hostname: kafka
+    container_name: kafka
     ports:
-      - "19092:9092"
+      - "9092:9092"
+      - "9093:9093"
     environment:
-      KAFKA_CLUSTER_ID: ${KAFKA_CLUSTER_ID:-MkU3OEVBNTcwNTJENDM2Qk}
+      KAFKA_KRAFT_MODE: "true"  # This enables KRaft mode in Kafka.
+      KAFKA_PROCESS_ROLES: controller,broker  # Kafka acts as both broker and controller.
+      KAFKA_NODE_ID: 1  # A unique ID for this Kafka instance.
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@localhost:9093"  # Defines the controller voters.
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_LOG_DIRS: /var/lib/kafka/data  # Where Kafka stores its logs.
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"  # Kafka will automatically create topics if needed.
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1  # Since we're running one broker, one replica is enough.
+      KAFKA_LOG_RETENTION_HOURS: 168  # Keep logs for 7 days.
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0  # No delay for consumer rebalancing.
+      CLUSTER_ID: "Mk3OEYBSD34fcwNTJENDW233"  # A unique ID for the Kafka cluster.
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - kafka_data:/var/lib/kafka/data  # Store Kafka logs on your local machine.
     networks:
       - kafka-net
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 > /dev/null 2>&1",
-        ]
-      interval: 10s
-      timeout: 10s
-      retries: 5
-    volumes:
-      - kafka-data-1:/var/lib/kafka/data
-      - ./server-kraft.properties:/opt/kafka/config/kraft/server.properties:ro
-    command: >
-      bash -c "
-        if [ ! -f /var/lib/kafka/data/meta.properties ]; then
-          echo 'Formatting Kafka storage for KRaft mode with cluster ID: $${KAFKA_CLUSTER_ID}'
-          /opt/kafka/bin/kafka-storage.sh format -t $${KAFKA_CLUSTER_ID} -c /opt/kafka/config/kraft/server.properties --ignore-formatted
-        fi
-        echo 'Starting Kafka server for kraft-cluster...'
-        exec /opt/kafka/bin/kafka-server-start.sh /opt/kafka/config/kraft/server.properties
-      "
 
   kafka-ui:
     image: provectuslabs/kafka-ui
@@ -38,9 +37,9 @@ services:
     restart: always
     environment:
       KAFKA_CLUSTERS_0_NAME: "kraft-cluster"
-      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka-1:9094
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
     depends_on:
-      - kafka-1
+      - kafka
     networks:
       - kafka-net
 
@@ -49,5 +48,5 @@ networks:
     driver: bridge
 
 volumes:
-  kafka-data-1:
+  kafka_data:
     driver: local
